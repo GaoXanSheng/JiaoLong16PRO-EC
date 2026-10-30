@@ -49,11 +49,11 @@
 
 `tools/build.py` 把三份 Intel HEX 按区域偏移拼成 128 KiB，再和 `firmware/eFlashBK.bin` 逐字节比较，报告写入 `build/build_report.md`。
 
-`tools/build.py --firmware` 在此之后把语义 C 函数编译、链接到空闲区并改写原始入口，输出 `build/firmware_128k.bin`。当前覆盖：电池任务链接到 bank0 `0xE600`（入口包装 `0xE600`，C 任务 `0xE78F`，改写 `0xA182` 的 `LCALL 0x40F9`），CRC 更新链接到 region0 `0x7B00`（入口包装 `0x7B00`，C 函数 `0x7B3A`，改写 `0x203A` 的 `MOV R0,#0xAF`）。这是 C 代码进入固件的正式路径。
+`tools/build.py --firmware` 在此之后把语义 C 函数编译、链接到空闲区并改写原始入口，输出 `build/firmware_128k.bin`。当前覆盖：电池任务链接到 bank0 `0xE600`（入口包装 `0xE600`，C 任务 `0xE78F`，改写 `0xA182` 的 `LCALL 0x40F9`），CRC 更新链接到 region0 `0x7B00`（入口包装 `0x7B00`，C 函数 `0x7B3A`，改写 `0x203A` 的 `MOV R0,#0xAF`）。这是当前 C 代码进入固件的路径。
 
 因为数据都保留了原始字节，即使指令还原有偏差，只要地址不变，镜像仍然一致；反过来说明镜像一致不能证明指令语义全部还原正确。
 
-改动 `.a51` 里的指令会改变后续地址，除非同时保持长度和跳转目标，否则会和 `functions.csv`、`.db` 填充一起错位。修改固件应优先按函数整体替换，并重新校验。
+改 `.a51` 里的指令会移动后续地址。除非同时保持指令长度和跳转目标，否则会和 `functions.csv`、`.db` 填充一起错位。修改固件应优先按函数整体替换，并重新校验。
 
 ## 4. C 翻译模型
 

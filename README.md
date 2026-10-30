@@ -15,7 +15,7 @@
 | 反汇编覆盖 | 代码字节占比 region0 42.35%、region1 50.56%、region2 19.31%、region3 2.17% |
 | 函数识别 | 1164 个函数，1559 条跨区域调用边 |
 | 寄存器 | XDATA 673 个、位地址 38 个、SFR 45 个，见 `include/generated/ec_regs.h` |
-| C 翻译 | 14 个文件编译通过（`ec_jump.c` 峰值约 32 GB 内存），但**不能链接成镜像**：CSEG 268,877 字节，超过 65,536 字节代码空间 |
+| C 翻译 | 14 个文件可编译，但**不能链接成镜像**：CSEG 268,877 字节，超过 65,536 字节代码空间。`ec_jump.c` 峰值约 32 GB 内存，内存不足时会被 OOM 终止 |
 | 电池业务逻辑 | 已按汇编语义重写，11 个仿真场景通过 |
 | C 固件集成 | 电池任务和 CRC 更新已编入 `build/firmware_128k.bin`：`0xE600` / `0x7B00`，补丁 `0xA182` / `0x203A` |
 | 构建环境 | Linux（Ubuntu + SDCC 4.5.0）已完整验证；Windows 入口保留 |
@@ -26,7 +26,7 @@
 - SDCC 4.5.0（mcs51）：
   - Linux：`sudo apt install sdcc sdcc-ucsim`，可执行文件在 `/usr/bin`。
   - Windows：安装 SDCC 4.5.0，默认在 `C:\Program Files\SDCC\bin`。
-  - 两类环境都可以用环境变量 `SDCC_BIN` 指向自定义工具目录。
+  - 两种环境都可以用 `SDCC_BIN` 指定工具目录。
 - Python 3.10+。
 - `tools/toolchain.py` 统一处理平台差异：Windows 自动补 `.exe` 后缀，Linux 直接使用命令名；8051 模拟器在 Windows 是 `s51.exe`，Ubuntu 是 `ucsim_51`（`sdcc-ucsim` 包）。
 
@@ -101,7 +101,7 @@ python3 -m unittest discover -s tests -v
 
 ## 生成物与手写文件
 
-生成物不要手改，下一次重生成会覆盖：
+生成物不要手改，下次重生成会覆盖：
 
 | 生成物 | 生成脚本 |
 |---|---|
@@ -140,11 +140,11 @@ port/src/modules/*.c + src/glue/*.a51
 - 全量 C 翻译是指令级转写，不是可维护的重新实现。实测链接结果：CSEG 268,877 字节，超过 8051 的 65,536 字节代码空间，另有 214 字节内部 RAM 分配失败。它不能成为固件，只能作为阅读参考。
 - `--c` 只是编译校验：`port/generated/common/ec_jump.c` 单文件编译峰值约 32 GB 内存，内存不足的环境会被 OOM 终止（其余 13 个文件正常）。固件构建和测试不依赖这一步。
 - `--firmware` 目前只覆盖电池任务和 CRC 更新；其余 1160 多个函数仍是原始汇编。全 C 需要继续逐函数重写。
-- C 代码段固定使用寄存器组 0；入口包装 `_bat_task_entry` 会保存/恢复 bank0。栈使用现有 `SP=0xC0`，模拟器实测最深 `0xCE`，但没有实机验证中断并发。
+- C 代码段固定使用寄存器组 0；入口包装 `_bat_task_entry` 会保存/恢复 bank0。栈沿用现有的 `SP=0xC0`，模拟器实测最深到 `0xCE`；中断并发没有实机验证。
 - bank1/bank2 的入口机制未确认，这两个区域的函数识别是探索性结果。
 - 没有实机验证：重建镜像与原镜像一致，但功能行为未测试。
 - 生成脚本读取固定路径 `firmware/eFlashBK.bin`，换镜像需要同步改脚本里的区域定义。
-- Ubuntu 的模拟器命令名是 `ucsim_51`，且命令回显与 dump 输出分属不同线程，一次性喂完整脚本会拼坏输出；`tools/simrun.py` 逐条喂命令规避，测试因此比 Windows 慢几秒。
+- Ubuntu 的模拟器命令名是 `ucsim_51`，且命令回显与 dump 输出分属不同线程，一次性喂完整脚本会把输出拼坏；`tools/simrun.py` 逐条喂命令规避，测试因此比 Windows 慢几秒。
 - `tools/winFT/` 是 Windows 专用刷写工具，Linux 下刷写需要 Windows 机器、虚拟机或等价工具。
 
 ## 刷写

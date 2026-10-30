@@ -60,7 +60,7 @@ Could not get 214 bytes in internal RAM for area DSEG
 Insufficient ROM/EPROM/FLASH memory
 ```
 
-代码体积是原固件的 7 倍，超过 8051 代码空间 4 倍。即使把影子 RAM 全部移到 XDATA，也放不进 64 KiB，更不用说 128 KiB 分 bank 的布局。这个翻译只能用于阅读，不能作为固件。
+代码体积约为原始代码的 7 倍，超过 8051 代码空间 4 倍。即使把影子 RAM 全部移到 XDATA，也放不进 64 KiB，更不用说 128 KiB 分 bank 的布局。这个翻译只能用于阅读，不能作为固件。
 
 ## 编译
 
