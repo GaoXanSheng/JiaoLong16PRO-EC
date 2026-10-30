@@ -1,0 +1,9 @@
+-i build/main64.ihx
+-M
+-b VECTORS = 0x0000
+-b REGION0 = 0x002B
+-b BANK0 = 0x8000
+build/vectors.rel
+build/region0.rel
+build/bank0.rel
+-e

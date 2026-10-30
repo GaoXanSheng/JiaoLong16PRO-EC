@@ -1,0 +1,5 @@
+-i build/bank1.ihx
+-M
+-b BANK1 = 0x8000
+build/bank1.rel
+-e

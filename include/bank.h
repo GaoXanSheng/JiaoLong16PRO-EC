@@ -1,0 +1,8 @@
+#ifndef BANK_H
+#define BANK_H
+#define BANK_FIXED_BASE 0x0000
+#define BANK_FIXED_SIZE 0x8000
+#define BANK_WINDOW_BASE 0x8000
+#define BANK_WINDOW_SIZE 0x8000
+#define BANK_COUNT 3
+#endif
