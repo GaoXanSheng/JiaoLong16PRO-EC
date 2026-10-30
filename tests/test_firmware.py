@@ -1,5 +1,4 @@
 import json
-import os
 import re
 import subprocess
 import sys
@@ -7,7 +6,10 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SDCC = Path(os.environ.get("SDCC_BIN", r"C:\Program Files\SDCC\bin"))
+sys.path.insert(0, str(ROOT / "tools"))
+from toolchain import env_with_path, require, simulator
+from simrun import run_simulator
+
 STUB_IHX = ROOT / "build" / "fw" / "firmware64_stub.ihx"
 CRC_IMAGE = ROOT / "build" / "fw" / "crc_hook_test_image.ihx"
 
@@ -21,9 +23,7 @@ def run_build():
 
 
 def sdcc_env():
-    env = dict(os.environ)
-    env["PATH"] = str(SDCC) + os.pathsep + env.get("PATH", "")
-    return env
+    return env_with_path()
 
 
 def write_ihx(path, data):
@@ -62,8 +62,8 @@ def make_crc_image():
     rel = ROOT / "build" / "fw" / "crc_hook_test.rel"
     ihx = ROOT / "build" / "fw" / "crc_hook_test.ihx"
     env = sdcc_env()
-    sdas = str(SDCC / "sdas8051.exe")
-    sdld = str(SDCC / "sdld.exe")
+    sdas = str(require("sdas8051"))
+    sdld = str(require("sdld"))
     proc = subprocess.run([sdas, "-plosgff", str(rel), str(ROOT / "tests" / "sim" / "crc_hook_test.a51")],
                           cwd=ROOT, capture_output=True, text=True, env=env)
     if proc.returncode != 0:
@@ -97,10 +97,8 @@ def run_stub(setup):
         "dump iram 0x00 0x07",
         "quit",
     ]
-    proc = subprocess.run([str(SDCC / "s51.exe"), "-q"], cwd=ROOT,
-                          input="\n".join(commands) + "\n", capture_output=True,
-                          text=True, encoding="utf-8", errors="replace", timeout=120)
-    return parse_dump(proc.stdout), proc.stdout
+    stdout = run_simulator(commands, timeout=120)
+    return parse_dump(stdout), stdout
 
 
 def run_crc():
@@ -113,10 +111,8 @@ def run_crc():
         "dump xram 0xfc00 0xfc07",
         "quit",
     ]
-    proc = subprocess.run([str(SDCC / "s51.exe"), "-q"], cwd=ROOT,
-                          input="\n".join(commands) + "\n", capture_output=True,
-                          text=True, encoding="utf-8", errors="replace", timeout=120)
-    return parse_dump(proc.stdout)
+    stdout = run_simulator(commands, timeout=120)
+    return parse_dump(stdout)
 
 
 def parse_dump(text):
@@ -174,7 +170,7 @@ class FirmwareIntegrationTest(unittest.TestCase):
         self.assertEqual(self.report["call_after"],
                          "12" + self.report["entry_address"][2:].lower())
 
-    @unittest.skipUnless((SDCC / "s51.exe").exists(), "s51 simulator not found")
+    @unittest.skipUnless(simulator(), "8051 simulator not found")
     def test_model_select_runs_in_firmware_context(self):
         make_stub_image()
         setup = [
@@ -199,7 +195,7 @@ class FirmwareIntegrationTest(unittest.TestCase):
         self.assertEqual([mem[i] for i in range(8)],
                          [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88])
 
-    @unittest.skipUnless((SDCC / "s51.exe").exists(), "s51 simulator not found")
+    @unittest.skipUnless(simulator(), "8051 simulator not found")
     def test_init_sequence_runs_in_firmware_context(self):
         make_stub_image()
         setup = [
@@ -239,7 +235,7 @@ class FirmwareIntegrationTest(unittest.TestCase):
         self.assertIsNotNone(match)
         self.assertLessEqual(int(match.group(1), 16), 0xFF)
 
-    @unittest.skipUnless((SDCC / "s51.exe").exists(), "s51 simulator not found")
+    @unittest.skipUnless(simulator(), "8051 simulator not found")
     def test_crc_override_runs_in_firmware_context(self):
         make_crc_image()
         mem = run_crc()

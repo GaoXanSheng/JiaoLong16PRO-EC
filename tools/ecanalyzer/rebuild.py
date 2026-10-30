@@ -3,16 +3,18 @@ import bisect
 import csv
 import importlib.util
 import json
-import os
 import re
 import subprocess
+import sys
 from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools"))
+from toolchain import env_with_path, tool
+
 BUILD = ROOT / "build"
 ANALYSIS = BUILD / "analysis"
-SDCC = Path(os.environ.get("SDCC_BIN", r"C:\Program Files\SDCC\bin"))
 
 spec = importlib.util.spec_from_file_location("ecanalyzer", ROOT / "tools" / "ecanalyzer" / "ecanalyzer.py")
 ec = importlib.util.module_from_spec(spec)
@@ -132,9 +134,8 @@ def emit_region(region, m, start, path, module, area):
 
 
 def run(cmd, cwd=None):
-    env = dict(os.environ)
-    env["PATH"] = str(SDCC) + os.pathsep + env.get("PATH", "")
-    p = subprocess.run([str(c) for c in cmd], cwd=cwd, capture_output=True, text=True, env=env)
+    p = subprocess.run([str(c) for c in cmd], cwd=cwd, capture_output=True, text=True,
+                       env=env_with_path())
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
@@ -166,11 +167,11 @@ def assemble(sources, out_ihx, link_name):
     steps = []
     for src in sources:
         rel = BUILD / (src.stem + ".rel")
-        code, out = run([str(SDCC / "sdas8051.exe"), "-plosgff", str(rel), str(src)])
+        code, out = run([str(tool("sdas8051")), "-plosgff", str(rel), str(src)])
         steps.append({"cmd": src.name, "code": code, "out": out.strip()[-300:]})
         if code != 0:
             return None, steps
-    cmd = [str(SDCC / "sdld.exe"), "-f", str(ROOT / "linker" / f"{link_name}.lk")]
+    cmd = [str(tool("sdld")), "-f", str(ROOT / "linker" / f"{link_name}.lk")]
     code, out = run(cmd, cwd=ROOT)
     steps.append({"cmd": "sdld " + out_ihx.name, "code": code, "out": out.strip()[-300:]})
     if code != 0:

@@ -15,8 +15,8 @@
 
 ## 覆盖函数
 
-```bat
-python tools\build.py --firmware
+```bash
+python3 tools/build.py --firmware
 ```
 
 | 覆盖 | 原始入口 | C 源 | 实际入口 | 代码段 | 镜像补丁 |
@@ -39,13 +39,13 @@ python tools\build.py --firmware
 
 ## 验证
 
-电池模块有 SDCC + s51 仿真测试，覆盖 11 个场景：
+电池模块有 SDCC + 8051 模拟器测试（Windows `s51.exe` / Linux `ucsim_51`），覆盖 11 个场景：
 
-```bat
-python -m unittest tests.test_battery_sim -v
+```bash
+python3 -m unittest tests.test_battery_sim -v
 ```
 
-`tests/test_firmware.py` 把集成镜像的前 64 KiB 载入 s51：
+`tests/test_firmware.py` 把集成镜像的前 64 KiB 载入模拟器：
 
 - 从 `0xA182` 执行电池 C 任务（分发器临时替换为返回成功的桩），校验型号、同步寄存器、邮箱、初始化序列和 bank0 恢复。
 - 从 `0x7C00` 的测试桩调用 `0x203A`，用 4 组输入校验 CRC 的返回值和 IRAM `0xAF` 状态。
@@ -64,14 +64,14 @@ Insufficient ROM/EPROM/FLASH memory
 
 ## 编译
 
-```bat
-python tools\build.py --c
+```bash
+python3 tools/build.py --c
 ```
 
-产物在 `build/c/`，完整日志为 `build/c/compile.log`。当前结果：14 个文件，0 错误，150 警告。
+产物在 `build/c/`，完整日志为 `build/c/compile.log`。Windows + SDCC 4.5.0 实测 14 个文件、0 错误、150 警告。`port/generated/common/ec_jump.c` 单文件编译峰值约 32 GB 内存，Linux 内存不足时会被 OOM 终止（其余 13 个文件正常）；这一步只做编译校验，不影响固件构建。
 
 ## 使用方式
 
 - 读某个函数时，在 `generated/` 里按地址定位，配合 `build/analysis/disassembly_region*.asm` 对照。
 - 新增覆盖函数：在 `src/modules/` 写语义 C，在 `src/glue/` 写寄存器 ABI 包装，在 `tools/build.py` 增加代码段和补丁登记；不要改生成文件。
-- 重新生成翻译：先跑 `python tools/ecanalyzer/to_c.py`（依赖 `build/analysis/functions.csv`）。
+- 重新生成翻译：先跑 `python3 tools/ecanalyzer/to_c.py`（依赖 `build/analysis/functions.csv`）。

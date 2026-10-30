@@ -2,7 +2,6 @@
 import argparse
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -10,6 +9,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
+from toolchain import env_with_path, require
+
 BUILD = ROOT / "build"
 ANALYSIS = BUILD / "analysis"
 C_BUILD = BUILD / "c"
@@ -24,7 +26,6 @@ CRC_BLOB_BASE = 0x7B00
 CRC_PATCH_FILE = 0x203A
 CRC_PATCH_ORIGINAL = bytes([0x78, 0xAF, 0xE6])
 CRC_ENTRY_SYMBOL = "_crc_entry"
-SDCC = Path(os.environ.get("SDCC_BIN", r"C:\Program Files\SDCC\bin"))
 IMAGE_SIZE = 0x20000
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip() if (ROOT / "VERSION").exists() else "dev"
 
@@ -46,18 +47,16 @@ class BuildError(Exception):
 
 
 def run(cmd):
-    env = dict(os.environ)
-    env["PATH"] = str(SDCC) + os.pathsep + env.get("PATH", "")
     proc = subprocess.run([str(c) for c in cmd], cwd=ROOT, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", env=env)
+                          encoding="utf-8", errors="replace", env=env_with_path())
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 
 def need_tool(name):
-    exe = SDCC / name
-    if not exe.exists():
-        raise BuildError(f"找不到 {exe}，安装 SDCC 4.5.0 或设置环境变量 SDCC_BIN 指向其 bin 目录")
-    return exe
+    try:
+        return require(name)
+    except FileNotFoundError as exc:
+        raise BuildError(str(exc))
 
 
 def sha256(path):
@@ -94,8 +93,8 @@ def load_image():
 
 
 def assemble():
-    sdas = need_tool("sdas8051.exe")
-    sdld = need_tool("sdld.exe")
+    sdas = need_tool("sdas8051")
+    sdld = need_tool("sdld")
     BUILD.mkdir(parents=True, exist_ok=True)
     steps = []
     for src, name in ASM_UNITS:
@@ -180,7 +179,7 @@ def c_sources():
 
 
 def build_c():
-    sdcc = need_tool("sdcc.exe")
+    sdcc = need_tool("sdcc")
     C_BUILD.mkdir(parents=True, exist_ok=True)
     log = []
     errors = 0
@@ -198,6 +197,9 @@ def build_c():
         log.append(out.rstrip())
         if code != 0:
             errors += 1
+            if code < 0:
+                log.append(f"[signal {-code}] 编译进程被信号终止，常见原因是内存不足"
+                           f"（ec_jump.c 峰值约 32 GB）")
     (C_BUILD / "compile.log").write_text("\n".join(log) + "\n", encoding="utf-8")
     print(f"C 翻译编译: {len(c_sources())} 个文件，错误 {errors}，警告 {warnings}")
     print(f"日志: {C_BUILD / 'compile.log'}")
@@ -224,9 +226,9 @@ def build_firmware():
     code = build_asm()
     if code != 0:
         return code
-    sdcc = need_tool("sdcc.exe")
-    sdas = need_tool("sdas8051.exe")
-    sdld = need_tool("sdld.exe")
+    sdcc = need_tool("sdcc")
+    sdas = need_tool("sdas8051")
+    sdld = need_tool("sdld")
     FW_BUILD.mkdir(parents=True, exist_ok=True)
     bat_rel = FW_BUILD / "battery.rel"
     glue_rel = FW_BUILD / "bat_dispatch.rel"

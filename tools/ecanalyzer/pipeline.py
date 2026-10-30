@@ -2,15 +2,17 @@
 import csv
 import importlib.util
 import json
-import os
 import subprocess
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools"))
+from toolchain import env_with_path, tool
+
 ANALYSIS = ROOT / "build" / "analysis"
 BUILD = ROOT / "build"
-SDCC = Path(os.environ.get("SDCC_BIN", r"C:\Program Files\SDCC\bin"))
 
 spec = importlib.util.spec_from_file_location("ecanalyzer", ROOT / "tools" / "ecanalyzer" / "ecanalyzer.py")
 ec = importlib.util.module_from_spec(spec)
@@ -215,10 +217,7 @@ def project_files(data, regions, maps):
 
 
 def run(cmd, cwd=None):
-    import os
-    env = dict(os.environ)
-    env["PATH"] = str(SDCC) + os.pathsep + env.get("PATH", "")
-    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, env=env)
+    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, env=env_with_path())
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
@@ -250,9 +249,9 @@ def ihx_to_bin(path):
 
 def build_and_diff(data):
     BUILD.mkdir(parents=True, exist_ok=True)
-    sdcc = SDCC / "sdcc.exe"
-    sdas = SDCC / "sdas8051.exe"
-    sdld = SDCC / "sdld.exe"
+    sdcc = tool("sdcc")
+    sdas = tool("sdas8051")
+    sdld = tool("sdld")
     result = {"sdcc": str(sdcc), "steps": [], "diff": []}
     if not sdcc.exists():
         result["blocked"] = "sdcc not found"
@@ -303,7 +302,7 @@ def verification_plan():
         "",
         "本机没有连接 EC 调试器或目标主板，实机步骤未执行。",
         "",
-        "1. 用 `tools/winFT/WinFT.exe` 先 `/B` 备份当前 EC flash，确认备份 SHA256 与 `firmware/eFlashBK.bin` 的差异。",
+        "1. 在 Windows 上用 `tools/winFT/WinFT.exe` 先 `/B` 备份当前 EC flash，确认备份 SHA256 与 `firmware/eFlashBK.bin` 的差异。",
         "2. 修改后的镜像先用 `sdcc` 构建，比较 `build/linked.bin` 与原始镜像在改动函数范围内的字节。",
         "3. 用编程器或 EC 调试接口写入，保留原始镜像用于回滚。",
         "4. 上电后按功能验证：风扇转速曲线、充电电流、温度读数、ACPI EC 命令响应。",

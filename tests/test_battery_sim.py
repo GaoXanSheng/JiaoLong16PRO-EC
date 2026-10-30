@@ -1,11 +1,14 @@
-import os
 import re
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SDCC = Path(os.environ.get("SDCC_BIN", r"C:\Program Files\SDCC\bin"))
+sys.path.insert(0, str(ROOT / "tools"))
+from toolchain import env_with_path, require, simulator
+from simrun import run_simulator
+
 SIM_DIR = ROOT / "build" / "sim"
 IHX = SIM_DIR / "battery_sim.ihx"
 
@@ -100,15 +103,13 @@ S51_COMMANDS = [
 
 
 def sdcc_env():
-    env = dict(os.environ)
-    env["PATH"] = str(SDCC) + os.pathsep + env.get("PATH", "")
-    return env
+    return env_with_path()
 
 
 def build_sim():
     SIM_DIR.mkdir(parents=True, exist_ok=True)
     env = sdcc_env()
-    sdcc = str(SDCC / "sdcc.exe")
+    sdcc = str(require("sdcc"))
     steps = [
         [sdcc, "-mmcs51", "--model-small", "--std-c99", "-I", str(ROOT / "include"),
          "-c", str(ROOT / "tests" / "sim" / "battery_sim.c"), "-o", str(SIM_DIR / "battery_sim.rel")],
@@ -125,13 +126,10 @@ def build_sim():
 
 
 def run_sim():
-    env = sdcc_env()
-    proc = subprocess.run([str(SDCC / "s51.exe"), "-q"], cwd=ROOT, input="\n".join(S51_COMMANDS) + "\n",
-                          capture_output=True, text=True, encoding="utf-8", errors="replace",
-                          env=env, timeout=120)
-    if "Event `write' at xram[0xf000]" not in proc.stdout:
-        raise RuntimeError("simulation did not reach the completion marker\n" + proc.stdout[-2000:])
-    return parse_dump(proc.stdout)
+    stdout = run_simulator(S51_COMMANDS, timeout=120)
+    if "Event `write' at xram[0xf000]" not in stdout:
+        raise RuntimeError("simulation did not reach the completion marker\n" + stdout[-2000:])
+    return parse_dump(stdout)
 
 
 def parse_dump(text):
@@ -148,7 +146,7 @@ def parse_dump(text):
     return mem
 
 
-@unittest.skipUnless((SDCC / "s51.exe").exists(), "s51 simulator not found")
+@unittest.skipUnless(simulator(), "8051 simulator not found")
 class BatteryLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

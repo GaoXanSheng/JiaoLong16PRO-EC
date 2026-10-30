@@ -1,5 +1,17 @@
 # 变更记录
 
+## 0.5.0 - 2026-10-30
+
+- 工程命名 ECForge，README 与相关文档同步更新。
+- 新增 `tools/toolchain.py`：跨平台定位 SDCC，Windows 自动补 `.exe`，Linux 使用 `/usr/bin`，`SDCC_BIN` 仍可覆盖默认路径。
+- `tools/build.py`、`tools/ecanalyzer/pipeline.py`、`tools/ecanalyzer/rebuild.py` 不再写死 `C:\Program Files\SDCC\bin` 和 `.exe` 后缀。
+- 新增 `tools/simrun.py`：自动发现 `s51` 或 `ucsim_51`，逐条喂命令规避 Linux ucsim 命令回显与 dump 输出的字符级交错。
+- 测试适配 Linux：模拟器按平台自动发现，缺失时跳过。
+- 新增 `tools/build.sh` 作为 Linux/macOS 构建入口，`tools/build.bat` 保留给 Windows。
+- 文档改为 Linux 优先的示例命令（README、ARCHITECTURE、BUSINESS、port/README）。
+- `--c` 日志会标注被信号终止的编译进程；文档记录 `ec_jump.c` 约 32 GB 的内存峰值。
+- Linux + SDCC 4.5.0 实测：重建镜像逐字节一致，8 项测试全部通过。
+
 ## 0.4.0 - 2026-10-30
 
 - 新增 `0x203A` 校验更新函数的语义 C 实现：`port/src/modules/ec_crc.c`，状态字节在 IRAM `0xAF`。

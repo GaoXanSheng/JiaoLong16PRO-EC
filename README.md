@@ -1,6 +1,6 @@
-# EC 固件重建工程
+# ECForge —— 蛟龙 16 Pro EC 固件重建工程
 
-笔记本 EC（Embedded Controller）固件 `eFlashBK.bin`（128 KiB）的逆向重建工程。工程目标：
+笔记本 EC（Embedded Controller）固件 `eFlashBK.bin`（128 KiB）的逆向重建工程。工程代号 **ECForge**（EC + Forge，把原始镜像重新锻造出来），仓库名沿用 `JiaoLong16PRO-EC`。工程目标：
 
 1. 把整份固件还原成可编译的 8051 汇编，并能从源码重建出与原镜像逐字节一致的结果。
 2. 把业务逻辑写成可编译进镜像的语义 C，逐步替换原始汇编。
@@ -15,41 +15,49 @@
 | 反汇编覆盖 | 代码字节占比 region0 42.35%、region1 50.56%、region2 19.31%、region3 2.17% |
 | 函数识别 | 1164 个函数，1559 条跨区域调用边 |
 | 寄存器 | XDATA 673 个、位地址 38 个、SFR 45 个，见 `include/generated/ec_regs.h` |
-| C 翻译 | 14 个文件编译通过，但**不能链接成镜像**：CSEG 268,877 字节，超过 65,536 字节代码空间 |
-| 电池业务逻辑 | 已按汇编语义重写，11 个 s51 仿真场景通过 |
+| C 翻译 | 14 个文件编译通过（`ec_jump.c` 峰值约 32 GB 内存），但**不能链接成镜像**：CSEG 268,877 字节，超过 65,536 字节代码空间 |
+| 电池业务逻辑 | 已按汇编语义重写，11 个仿真场景通过 |
 | C 固件集成 | 电池任务和 CRC 更新已编入 `build/firmware_128k.bin`：`0xE600` / `0x7B00`，补丁 `0xA182` / `0x203A` |
+| 构建环境 | Linux（Ubuntu + SDCC 4.5.0）已完整验证；Windows 入口保留 |
 | 实机验证 | 未执行，本机没有目标硬件 |
 
 ## 环境
 
-- SDCC 4.5.0（mcs51），默认路径 `C:\Program Files\SDCC\bin`，可用环境变量 `SDCC_BIN` 覆盖。
+- SDCC 4.5.0（mcs51）：
+  - Linux：`sudo apt install sdcc sdcc-ucsim`，可执行文件在 `/usr/bin`。
+  - Windows：安装 SDCC 4.5.0，默认在 `C:\Program Files\SDCC\bin`。
+  - 两类环境都可以用环境变量 `SDCC_BIN` 指向自定义工具目录。
 - Python 3.10+。
-- Windows：`tools\build.bat`、`tools\build_c.bat` 是批处理封装，也可以直接调用 `python tools/build.py`。
+- `tools/toolchain.py` 统一处理平台差异：Windows 自动补 `.exe` 后缀，Linux 直接使用命令名；8051 模拟器在 Windows 是 `s51.exe`，Ubuntu 是 `ucsim_51`（`sdcc-ucsim` 包）。
 
 ## 构建
 
-```bat
-:: 汇编 + 链接 + 与参考镜像逐字节校验
-python tools\build.py
+Linux / macOS：
 
-:: 编译 C 翻译树（仅编译校验）
-python tools\build.py --c
+```bash
+# 汇编 + 链接 + 与参考镜像逐字节校验
+python3 tools/build.py
 
-:: 重新分析镜像，生成 build\analysis 报告
-python tools\build.py --analyze
+# 编译 C 翻译树（仅编译校验）
+python3 tools/build.py --c
 
-:: 重新分析并从镜像生成汇编源，再构建校验
-python tools\build.py --regen
+# 重新分析镜像，生成 build/analysis 报告
+python3 tools/build.py --analyze
 
-:: regen + C 编译
-python tools\build.py --all
+# 重新分析并从镜像生成汇编源，再构建校验
+python3 tools/build.py --regen
 
-:: 清理 build 输出，保留 ghidra-project
-python tools\build.py --clean
+# regen + C 编译
+python3 tools/build.py --all
 
-:: 镜像校验 + 电池逻辑仿真 + 固件内 C 函数
-python -m unittest discover -s tests -v
+# 清理 build 输出，保留 ghidra-project
+python3 tools/build.py --clean
+
+# 镜像校验 + 电池逻辑仿真 + 固件内 C 函数
+python3 -m unittest discover -s tests -v
 ```
+
+`tools/build.sh` 是同一入口的 shell 封装；Windows 下用 `tools\build.bat`，或把命令里的 `python3 tools/build.py` 换成 `python tools\build.py`。
 
 默认构建只使用 `src/` 下已提交的 `.a51` 和 `linker/*.lk`，不依赖 `build/analysis`；`--regen` 才会重新分析并重写汇编源。
 
@@ -81,9 +89,12 @@ python -m unittest discover -s tests -v
 | `src/glue/crc_hook.a51` | CRC C 函数的寄存器 ABI 包装 | 手写 |
 | `include/` | 头文件；`include/generated/ec_regs.h` 为生成 | 混合 |
 | `linker/` | ASlink 命令文件：`main64.lk`、`bank1.lk`、`bank2.lk` | 手写 |
-| `tools/build.py` | 统一构建入口 | 手写 |
+| `tools/build.py` | 统一构建入口（跨平台） | 手写 |
+| `tools/build.sh` / `tools/build.bat` | Linux/macOS 与 Windows 的构建封装 | 手写 |
+| `tools/toolchain.py` | SDCC 与模拟器的跨平台定位 | 手写 |
+| `tools/simrun.py` | 模拟器调用封装，规避 ucsim 输出交错 | 手写 |
 | `tools/ecanalyzer/` | 分析、代码生成流水线 | 手写 |
-| `tools/winFT/` | EC flash 读写工具 | 第三方 |
+| `tools/winFT/` | EC flash 读写工具（Windows 专用） | 第三方 |
 | `tests/` | 构建校验测试 | 手写 |
 | `build/` | 构建与分析输出，可整体删除重建 | 输出 |
 | `docs/` | 架构说明与业务逻辑清单 | 手写 |
@@ -127,15 +138,18 @@ port/src/modules/*.c + src/glue/*.a51
 ## 已知限制
 
 - 全量 C 翻译是指令级转写，不是可维护的重新实现。实测链接结果：CSEG 268,877 字节，超过 8051 的 65,536 字节代码空间，另有 214 字节内部 RAM 分配失败。它不能成为固件，只能作为阅读参考。
+- `--c` 只是编译校验：`port/generated/common/ec_jump.c` 单文件编译峰值约 32 GB 内存，内存不足的环境会被 OOM 终止（其余 13 个文件正常）。固件构建和测试不依赖这一步。
 - `--firmware` 目前只覆盖电池任务和 CRC 更新；其余 1160 多个函数仍是原始汇编。全 C 需要继续逐函数重写。
 - C 代码段固定使用寄存器组 0；入口包装 `_bat_task_entry` 会保存/恢复 bank0。栈使用现有 `SP=0xC0`，模拟器实测最深 `0xCE`，但没有实机验证中断并发。
 - bank1/bank2 的入口机制未确认，这两个区域的函数识别是探索性结果。
 - 没有实机验证：重建镜像与原镜像一致，但功能行为未测试。
 - 生成脚本读取固定路径 `firmware/eFlashBK.bin`，换镜像需要同步改脚本里的区域定义。
+- Ubuntu 的模拟器命令名是 `ucsim_51`，且命令回显与 dump 输出分属不同线程，一次性喂完整脚本会拼坏输出；`tools/simrun.py` 逐条喂命令规避，测试因此比 Windows 慢几秒。
+- `tools/winFT/` 是 Windows 专用刷写工具，Linux 下刷写需要 Windows 机器、虚拟机或等价工具。
 
 ## 刷写
 
-`tools/winFT/` 可以读写 EC flash。`备份.bat` 先备份；`刷入.bat` 写入 `build/firmware_128k.bin`（C 模块编入后的镜像），镜像不存在时会提示先运行 `python toolsuild.py --firmware`。写坏 EC 固件可能导致整机不上电，务必先备份并保留原镜像用于回滚。
+`tools/winFT/` 可以读写 EC flash。`备份.bat` 先备份；`刷入.bat` 写入 `build/firmware_128k.bin`（C 模块编入后的镜像），镜像不存在时会提示先运行 `python3 tools/build.py --firmware`。写坏 EC 固件可能导致整机不上电，务必先备份并保留原镜像用于回滚。刷写工具依赖 Windows，Linux 环境请使用 Windows 机器或虚拟机。
 
 ## 文档
 

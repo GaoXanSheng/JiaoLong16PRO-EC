@@ -45,6 +45,8 @@
 | `linker/bank1.lk` | bank1 | `BANK1=0x8000` |
 | `linker/bank2.lk` | bank2 | `BANK2=0x8000` |
 
+命令文件里的路径都是相对仓库根目录的，Windows 和 Linux 通用；`tools/toolchain.py` 负责找到 `sdld` 并处理 `.exe` 后缀差异。
+
 `tools/build.py` 把三份 Intel HEX 按区域偏移拼成 128 KiB，再和 `firmware/eFlashBK.bin` 逐字节比较，报告写入 `build/build_report.md`。
 
 `tools/build.py --firmware` 在此之后把语义 C 函数编译、链接到空闲区并改写原始入口，输出 `build/firmware_128k.bin`。当前覆盖：电池任务链接到 bank0 `0xE600`（入口包装 `0xE600`，C 任务 `0xE78F`，改写 `0xA182` 的 `LCALL 0x40F9`），CRC 更新链接到 region0 `0x7B00`（入口包装 `0x7B00`，C 函数 `0x7B3A`，改写 `0x203A` 的 `MOV R0,#0xAF`）。这是 C 代码进入固件的正式路径。
@@ -74,13 +76,18 @@
 
 | 脚本 | 作用 | 主要输出 |
 |---|---|---|
+| `tools/toolchain.py` | 跨平台定位 SDCC 和 8051 模拟器（Windows `.exe`、Linux 无后缀） | 被其他脚本导入 |
+| `tools/simrun.py` | 模拟器调用封装；Linux `ucsim_51` 的命令回显与 dump 输出会字符级交错，这里逐条喂入规避 | 被测试导入 |
 | `tools/ecanalyzer/ecanalyzer.py` | 函数识别、控制流遍历、反汇编、寄存器访问统计 | `build/analysis/` 下全部基础数据 |
 | `tools/ecanalyzer/pipeline.py` | 汇总报告、生成头文件与工程小样、编译校验 | `include/generated/ec_regs.h`、`src/boot/vectors.a51`、`build/smoke/`、`build/analysis/*.md` |
 | `tools/ecanalyzer/rebuild.py` | 生成 4 个区域汇编并完成全镜像比对 | `src/fixed/region0.a51`、`src/banks/*.a51`、`build/rebuild_report.*` |
 | `tools/ecanalyzer/to_c.py` | 指令级 C 翻译 | `port/generated/` |
 | `tools/build.py` | 统一构建入口，封装上面三步和 SDCC 调用 | `build/rebuilt_128k.bin`、`build/build_report.*` |
 | `tools/build.py --firmware` | 把电池 C 模块编入 128 KiB 镜像 | `build/firmware_128k.bin`、`build/firmware_report.*` |
-| `tools/ecanalyzer/run_ghidra.bat` | 把区域和函数表导入 Ghidra，供交互分析 | `build/ghidra-project/` |
+| `tools/build.sh` / `tools/build.bat` | Linux/macOS 与 Windows 的构建封装 | 无 |
+| `tools/ecanalyzer/run_ghidra.bat` | 把区域和函数表导入 Ghidra，供交互分析（Windows） | `build/ghidra-project/` |
+
+`tools/toolchain.py` 默认在 Windows 使用 `C:\Program Files\SDCC\bin`、在 Linux 使用 `/usr/bin`，两者都可用 `SDCC_BIN` 覆盖。模拟器优先找 `s51`（Windows 的 SDCC 包），找不到再找 `ucsim_51`（Ubuntu 的 `sdcc-ucsim` 包）。
 
 Ghidra 脚本依赖 Ghidra 12.2 和 `ApplyEcFunctions.java`、`PrintEcStats.java`，不是构建必需步骤。
 
